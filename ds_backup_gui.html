@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎮 DS Save Backup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Variables ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --gb-dark:    #0d0f0d;
+  --gb-panel:   #141814;
+  --gb-card:    #1a1f1a;
+  --gb-border:  #2a3a2a;
+  --gb-green:   #4ade80;
+  --gb-lime:    #a3e635;
+  --gb-teal:    #2dd4bf;
+  --gb-amber:   #fbbf24;
+  --gb-red:     #f87171;
+  --gb-muted:   #4a5a4a;
+  --gb-text:    #c8d8c8;
+  --gb-bright:  #e8f8e8;
+  --pixel:      2px;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-mono:  'Share Tech Mono', monospace;
+  --scan-speed: 8s;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--gb-dark);
+  color: var(--gb-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Scanlines overlay ─────────────────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--gb-panel); }
+::-webkit-scrollbar-thumb { background: var(--gb-border); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--gb-muted); }
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+header {
+  background: var(--gb-panel);
+  border-bottom: var(--pixel) solid var(--gb-green);
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 32px rgba(74,222,128,0.08);
+}
+
+.header-title {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--gb-green);
+  text-shadow: 0 0 16px rgba(74,222,128,0.6);
+  letter-spacing: 1px;
+  line-height: 1.8;
+}
+
+.header-title span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--gb-muted);
+  display: block;
+  margin-top: 2px;
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.sd-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 6px 14px;
+  border: var(--pixel) solid var(--gb-border);
+  background: var(--gb-card);
+}
+
+.sd-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--gb-muted);
+  transition: all 0.3s;
+}
+.sd-dot.online { background: var(--gb-green); box-shadow: 0 0 8px var(--gb-green); animation: pulse 2s infinite; }
+.sd-dot.offline { background: var(--gb-red); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Layout ────────────────────────────────────────────────────────────── */
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 73px);
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--gb-panel);
+  border-right: var(--pixel) solid var(--gb-border);
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sidebar-section {
+  padding: 0 16px 20px;
+  border-bottom: 1px solid var(--gb-border);
+  margin-bottom: 4px;
+}
+
+.sidebar-label {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--gb-muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  padding-top: 16px;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--gb-card);
+  border: var(--pixel) solid var(--gb-border);
+  color: var(--gb-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.btn:hover {
+  border-color: var(--gb-green);
+  color: var(--gb-bright);
+  background: #1e271e;
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn.primary {
+  background: rgba(74,222,128,0.08);
+  border-color: var(--gb-green);
+  color: var(--gb-green);
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  justify-content: center;
+  padding: 14px;
+  letter-spacing: 1px;
+}
+
+.btn.primary:hover {
+  background: rgba(74,222,128,0.18);
+  box-shadow: 0 0 16px rgba(74,222,128,0.2);
+}
+
+.btn.danger {
+  border-color: var(--gb-red);
+  color: var(--gb-red);
+}
+.btn.danger:hover { background: rgba(248,113,113,0.08); }
+
+.btn.amber {
+  border-color: var(--gb-amber);
+  color: var(--gb-amber);
+}
+.btn.amber:hover { background: rgba(251,191,36,0.08); }
+
+.btn-icon { font-size: 16px; flex-shrink: 0; }
+
+.btn.loading .btn-icon { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.stat-box {
+  background: var(--gb-card);
+  border: 1px solid var(--gb-border);
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.stat-num {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--gb-green);
+  display: block;
+  text-shadow: 0 0 8px rgba(74,222,128,0.4);
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--gb-muted);
+  display: block;
+  margin-top: 4px;
+}
+
+/* ── SD card list in sidebar ───────────────────────────────────────────── */
+.card-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+  font-size: 13px;
+}
+
+.card-nav-item:hover { background: rgba(74,222,128,0.05); border-left-color: var(--gb-muted); }
+.card-nav-item.active { background: rgba(74,222,128,0.08); border-left-color: var(--gb-green); color: var(--gb-bright); }
+
+.card-nav-icon { font-size: 16px; }
+
+/* ── Main content ──────────────────────────────────────────────────────── */
+.main {
+  padding: 28px 32px;
+  overflow-y: auto;
+}
+
+/* ── Section header ────────────────────────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: var(--pixel) solid var(--gb-border);
+}
+
+.section-title {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--gb-green);
+  letter-spacing: 2px;
+}
+
+/* ── SD Card panel ─────────────────────────────────────────────────────── */
+.card-panel {
+  background: var(--gb-card);
+  border: var(--pixel) solid var(--gb-border);
+  margin-bottom: 28px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: rgba(74,222,128,0.04);
+  border-bottom: 1px solid var(--gb-border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-header:hover { background: rgba(74,222,128,0.08); }
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-name {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--gb-lime);
+  letter-spacing: 1px;
+}
+
+.card-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: rgba(74,222,128,0.1);
+  border: 1px solid rgba(74,222,128,0.3);
+  color: var(--gb-green);
+}
+
+.card-chevron {
+  color: var(--gb-muted);
+  transition: transform 0.2s;
+  font-size: 12px;
+}
+.card-panel.collapsed .card-chevron { transform: rotate(-90deg); }
+
+.card-body { padding: 0; }
+.card-panel.collapsed .card-body { display: none; }
+
+/* ── Games table ───────────────────────────────────────────────────────── */
+.games-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.games-table th {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--gb-muted);
+  letter-spacing: 1px;
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--gb-border);
+  background: rgba(0,0,0,0.2);
+  white-space: nowrap;
+}
+
+.games-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(42,58,42,0.5);
+  vertical-align: middle;
+  font-size: 13px;
+}
+
+.games-table tr:last-child td { border-bottom: none; }
+
+.games-table tr:hover td { background: rgba(74,222,128,0.03); }
+
+.game-name {
+  font-weight: 600;
+  color: var(--gb-bright);
+  font-size: 13px;
+}
+
+.hash-short {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--gb-muted);
+  letter-spacing: 0.5px;
+}
+
+.version-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ver-fill {
+  height: 6px;
+  background: var(--gb-border);
+  flex: 1;
+  min-width: 60px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ver-fill-inner {
+  height: 100%;
+  background: var(--gb-green);
+  transition: width 0.4s ease;
+}
+
+.ver-fill-inner.warn { background: var(--gb-amber); }
+.ver-fill-inner.full { background: var(--gb-red); }
+
+.ver-count {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--gb-green);
+  white-space: nowrap;
+  min-width: 36px;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 6px;
+}
+
+.icon-btn {
+  padding: 5px 10px;
+  background: var(--gb-panel);
+  border: 1px solid var(--gb-border);
+  color: var(--gb-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.icon-btn:hover { border-color: var(--gb-green); color: var(--gb-green); background: rgba(74,222,128,0.06); }
+.icon-btn.restore-btn:hover { border-color: var(--gb-teal); color: var(--gb-teal); }
+.icon-btn.cfg-btn:hover { border-color: var(--gb-amber); color: var(--gb-amber); }
+
+/* ── Output log panel ──────────────────────────────────────────────────── */
+.log-panel {
+  background: var(--gb-card);
+  border: var(--pixel) solid var(--gb-border);
+  margin-bottom: 28px;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--gb-border);
+  background: rgba(0,0,0,0.2);
+}
+
+.log-title {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--gb-muted);
+  letter-spacing: 2px;
+}
+
+.log-body {
+  padding: 16px 20px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--gb-muted);
+  max-height: 280px;
+  overflow-y: auto;
+  line-height: 1.8;
+  background: #0a0d0a;
+}
+
+.log-body .log-info  { color: var(--gb-teal); }
+.log-body .log-ok    { color: var(--gb-green); }
+.log-body .log-warn  { color: var(--gb-amber); }
+.log-body .log-error { color: var(--gb-red); }
+.log-body .log-ts    { color: #3a4a3a; margin-right: 8px; }
+
+/* ── Modal ─────────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  backdrop-filter: blur(2px);
+}
+
+.modal-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.modal {
+  background: var(--gb-panel);
+  border: var(--pixel) solid var(--gb-green);
+  width: 520px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 0 48px rgba(74,222,128,0.15);
+  transform: translateY(16px);
+  transition: transform 0.2s;
+}
+
+.modal-overlay.visible .modal { transform: translateY(0); }
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gb-border);
+  background: rgba(74,222,128,0.04);
+}
+
+.modal-title {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--gb-green);
+  letter-spacing: 1px;
+}
+
+.modal-close {
+  background: none;
+  border: 1px solid var(--gb-border);
+  color: var(--gb-muted);
+  cursor: pointer;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  transition: all 0.15s;
+}
+.modal-close:hover { border-color: var(--gb-red); color: var(--gb-red); }
+
+.modal-body { padding: 20px; }
+
+.version-list { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+
+.version-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--gb-card);
+  border: 1px solid var(--gb-border);
+  cursor: pointer;
+  transition: all 0.15s;
+  gap: 12px;
+}
+
+.version-item:hover { border-color: var(--gb-teal); background: rgba(45,212,191,0.06); }
+.version-item.selected { border-color: var(--gb-teal); background: rgba(45,212,191,0.1); }
+
+.version-item.restore-safety {
+  border-color: rgba(251,191,36,0.3);
+  background: rgba(251,191,36,0.04);
+  cursor: default;
+  opacity: 0.7;
+}
+.version-item.restore-safety:hover { border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.04); }
+
+.version-name { font-size: 12px; flex: 1; font-family: var(--font-mono); }
+.version-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border: 1px solid;
+}
+.version-tag.latest { border-color: var(--gb-green); color: var(--gb-green); }
+.version-tag.safety { border-color: var(--gb-amber); color: var(--gb-amber); }
+
+.form-row { margin-bottom: 14px; }
+.form-label {
+  display: block;
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--gb-muted);
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--gb-dark);
+  border: 1px solid var(--gb-border);
+  color: var(--gb-bright);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input:focus { border-color: var(--gb-green); }
+
+.modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--gb-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── Toast notifications ───────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2000;
+}
+
+.toast {
+  padding: 12px 18px;
+  background: var(--gb-panel);
+  border-left: 3px solid var(--gb-green);
+  font-size: 13px;
+  min-width: 260px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  animation: slideIn 0.25s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toast.error { border-left-color: var(--gb-red); }
+.toast.warn  { border-left-color: var(--gb-amber); }
+
+@keyframes slideIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to   { transform: translateX(120%); opacity: 0; }
+}
+
+/* ── Output stream panel ───────────────────────────────────────────────── */
+.output-panel {
+  background: #0a0d0a;
+  border: var(--pixel) solid var(--gb-border);
+  padding: 16px 20px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.8;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  margin-top: 12px;
+  display: none;
+}
+.output-panel.visible { display: block; }
+
+/* ── Empty state ───────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 80px 32px;
+  color: var(--gb-muted);
+}
+
+.empty-state .empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 20px;
+  filter: grayscale(0.5);
+}
+
+.empty-state p {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  line-height: 2;
+  letter-spacing: 1px;
+}
+
+/* ── Pixel decorations ─────────────────────────────────────────────────── */
+.pixel-corner {
+  position: absolute;
+  width: 4px; height: 4px;
+  background: var(--gb-green);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .main { padding: 16px; }
+  header { padding: 14px 16px; }
+  .header-title { font-size: 8px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="header-title">
+    🎮 DS SAVE BACKUP
+    <span id="backup-dir-display">Lade...</span>
+  </div>
+  <div class="header-status">
+    <div class="sd-indicator" id="sd-indicator">
+      <div class="sd-dot" id="sd-dot"></div>
+      <span id="sd-status-text">SD-Karte prüfen...</span>
+    </div>
+    <button class="btn primary" style="width:auto;padding:10px 18px;margin:0" onclick="runBackup(false)">
+      <span class="btn-icon" id="backup-icon">▶</span>&nbsp;BACKUP
+    </button>
+  </div>
+</header>
+
+<!-- App layout -->
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div style="padding: 0 16px;">
+      <div class="sidebar-label">Aktionen</div>
+      <button class="btn primary" onclick="runBackup(false)" id="btn-backup">
+        <span class="btn-icon">▶</span> BACKUP STARTEN
+      </button>
+      <button class="btn amber" onclick="runBackup(true)">
+        <span class="btn-icon">◉</span> DRY-RUN
+      </button>
+      <button class="btn" onclick="loadData()">
+        <span class="btn-icon">↺</span> Aktualisieren
+      </button>
+    </div>
+
+    <div style="padding: 0 16px; margin-top: 8px;">
+      <div class="sidebar-label">Übersicht</div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-box"><span class="stat-num" id="stat-cards">–</span><span class="stat-label">SD-Karten</span></div>
+        <div class="stat-box"><span class="stat-num" id="stat-games">–</span><span class="stat-label">Spiele</span></div>
+        <div class="stat-box"><span class="stat-num" id="stat-versions">–</span><span class="stat-label">Versionen</span></div>
+        <div class="stat-box"><span class="stat-num" id="stat-size">–</span><span class="stat-label">Ges. Größe</span></div>
+      </div>
+    </div>
+
+    <div style="padding: 0; margin-top: 8px; flex: 1;">
+      <div class="sidebar-label" style="padding: 0 16px;">SD-Karten</div>
+      <div id="card-nav"></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" id="main-content">
+    <div class="empty-state" id="loading-state">
+      <span class="empty-icon">⏳</span>
+      <p>Lade Backup-Daten...</p>
+    </div>
+  </main>
+</div>
+
+<!-- Restore Modal -->
+<div class="modal-overlay" id="restore-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">RESTORE — <span id="restore-game-title"></span></span>
+      <button class="modal-close" onclick="closeModal('restore-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--gb-muted);font-size:12px;margin-bottom:16px;">
+        Wähle eine Version zum Wiederherstellen. Der aktuelle Spielstand wird automatisch als Sicherheitskopie gesichert.
+      </p>
+      <div class="version-list" id="restore-version-list"></div>
+      <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.3);padding:12px 14px;margin-top:12px;font-size:12px;color:var(--gb-red);">
+        ⚠ Diese Aktion überschreibt den aktuellen Spielstand auf der SD-Karte!
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('restore-modal')" style="width:auto">Abbrechen</button>
+      <button class="btn" id="restore-confirm-btn"
+        style="width:auto;border-color:var(--gb-teal);color:var(--gb-teal);"
+        onclick="confirmRestore()">
+        ↩ Wiederherstellen
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Config Modal -->
+<div class="modal-overlay" id="config-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">KONFIGURATION — <span id="cfg-game-title"></span></span>
+      <button class="modal-close" onclick="closeModal('config-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="form-label">MAX. VERSIONEN (KEEP_VERSIONS)</label>
+        <input type="number" class="form-input" id="cfg-keep-input" min="1" max="99" value="5">
+      </div>
+      <p style="font-size:11px;color:var(--gb-muted);line-height:1.7;">
+        Wie viele Backup-Versionen sollen für dieses Spiel aufbewahrt werden?<br>
+        Ältere Versionen werden automatisch gelöscht (FIFO).
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('config-modal')" style="width:auto">Abbrechen</button>
+      <button class="btn" style="width:auto;border-color:var(--gb-amber);color:var(--gb-amber);"
+        onclick="saveConfig()">💾 Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backup output modal -->
+<div class="modal-overlay" id="output-modal">
+  <div class="modal" style="width:640px">
+    <div class="modal-header">
+      <span class="modal-title" id="output-modal-title">BACKUP LÄUFT...</span>
+      <button class="modal-close" onclick="closeModal('output-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <div class="output-panel visible" id="output-content" style="max-height:460px;border:none;margin:0;padding:20px;border-radius:0"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('output-modal');loadData();" style="width:auto">Schließen & Aktualisieren</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let cardsData    = [];
+let restoreCtx   = { sdId: null, gameName: null, selectedVersion: null };
+let configCtx    = { sdId: null, gameName: null };
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadConfig();
+  loadData();
+});
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/config');
+    const d = await r.json();
+    document.getElementById('backup-dir-display').textContent = d.backup_dir;
+    const dot  = document.getElementById('sd-dot');
+    const txt  = document.getElementById('sd-status-text');
+    if (d.sd_card_present) {
+      dot.className = 'sd-dot online';
+      // Label anzeigen wenn vorhanden, sonst nur Pfad
+      const label = d.sd_label ? `[${d.sd_label}]  ${d.source_dir}` : d.source_dir;
+      txt.textContent = 'SD: ' + label;
+    } else {
+      dot.className = 'sd-dot offline';
+      txt.textContent = 'Keine SD-Karte erkannt';
+    }
+  } catch(e) {
+    console.error('Config error:', e);
+  }
+}
+
+async function loadData() {
+  try {
+    const r = await fetch('/api/cards');
+    cardsData = await r.json();
+    renderAll();
+    loadConfig();   // SD-Status immer mit aktualisieren
+  } catch(e) {
+    showError('Server nicht erreichbar. Läuft ds_backup_server.py?');
+  }
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderSidebar();
+  renderMain();
+  updateStats();
+}
+
+function renderSidebar() {
+  const nav = document.getElementById('card-nav');
+  nav.innerHTML = cardsData.map(card => `
+    <div class="card-nav-item" onclick="scrollToCard('card-${card.id}')">
+      <span class="card-nav-icon">💾</span>
+      <span>${card.id}</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--gb-muted)">${card.game_count}</span>
+    </div>
+  `).join('');
+}
+
+function renderMain() {
+  const main = document.getElementById('main-content');
+
+  if (cardsData.length === 0) {
+    main.innerHTML = `
+      <div class="empty-state">
+        <span class="empty-icon">📭</span>
+        <p>KEINE BACKUPS GEFUNDEN<br><br>STARTE EINEN BACKUP-LAUF<br>UM SPIELSTÄNDE ZU SICHERN</p>
+      </div>`;
+    return;
+  }
+
+  main.innerHTML = `
+    <div class="section-header">
+      <span class="section-title">BACKUP ÜBERSICHT</span>
+      <span style="font-size:11px;color:var(--gb-muted)">${cardsData.length} SD-Karte(n)</span>
+    </div>
+    ${cardsData.map(card => renderCard(card)).join('')}
+    ${renderLogSection()}
+  `;
+}
+
+function renderCard(card) {
+  return `
+  <div class="card-panel" id="card-${card.id}">
+    <div class="card-header" onclick="toggleCard('card-${card.id}')">
+      <div class="card-title">
+        <span style="font-size:20px">💾</span>
+        <span class="card-name">${card.id}</span>
+        <span class="card-badge">${card.game_count} Spiel${card.game_count !== 1 ? 'e' : ''}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <span style="font-size:11px;color:var(--gb-muted)">Default: ${card.keep_default} Ver.</span>
+        <button class="icon-btn cfg-btn" onclick="openSdDefaultConfig(event,'${card.id}',${card.keep_default})"
+          title="SD-weite Standardkonfiguration">⚙ SD-Default</button>
+        <button class="icon-btn" onclick="openLog(event,'${card.id}')"
+          title="Log anzeigen">📋 Log</button>
+        <span class="card-chevron">▼</span>
+      </div>
+    </div>
+    <div class="card-body">
+      ${card.games.length === 0
+        ? `<div style="padding:32px;text-align:center;color:var(--gb-muted);font-size:12px">(Keine Einträge im Manifest)</div>`
+        : `<table class="games-table">
+          <thead>
+            <tr>
+              <th>SPIEL</th>
+              <th>GRÖSSE</th>
+              <th>LETZTE SICHERUNG</th>
+              <th>SHA256</th>
+              <th>VERSIONEN</th>
+              <th>AKTIONEN</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${card.games.map(g => renderGameRow(card.id, g)).join('')}
+          </tbody>
+        </table>`
+      }
+    </div>
+  </div>`;
+}
+
+function renderGameRow(sdId, g) {
+  const pct  = Math.min(g.version_count / g.keep_versions, 1) * 100;
+  const cls  = pct >= 100 ? 'full' : pct >= 70 ? 'warn' : '';
+
+  return `
+  <tr>
+    <td><span class="game-name">${escHtml(g.name)}</span></td>
+    <td style="color:var(--gb-muted);white-space:nowrap">${g.size}</td>
+    <td style="font-size:12px;white-space:nowrap">${g.last_backup}</td>
+    <td><span class="hash-short" title="${escHtml(g.sha256)}">${g.sha256.substring(0,14)}…</span></td>
+    <td>
+      <div class="version-bar">
+        <div class="ver-fill">
+          <div class="ver-fill-inner ${cls}" style="width:${pct}%"></div>
+        </div>
+        <span class="ver-count ${cls}">${g.version_count}/${g.keep_versions}</span>
+      </div>
+    </td>
+    <td>
+      <div class="actions-cell">
+        <button class="icon-btn restore-btn" onclick="openRestoreModal('${sdId}','${escHtml(g.name)}')"
+          title="Spielstand wiederherstellen">↩ Restore</button>
+        <button class="icon-btn cfg-btn" onclick="openGameConfig('${sdId}','${escHtml(g.name)}',${g.keep_versions})"
+          title="Versionsanzahl konfigurieren">⚙ Config</button>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function renderLogSection() {
+  return `
+  <div class="section-header" style="margin-top:8px">
+    <span class="section-title">AKTIVITÄTS-LOG</span>
+  </div>
+  <div class="log-panel">
+    <div class="log-header">
+      <span class="log-title">LOG-AUSGABE</span>
+      <div style="display:flex;gap:8px">
+        ${cardsData.map(c =>
+          `<button class="icon-btn" onclick="loadLog('${c.id}')">${c.id}</button>`
+        ).join('')}
+      </div>
+    </div>
+    <div class="log-body" id="log-body">
+      <span style="color:var(--gb-muted)">← SD-Karte auswählen um Log zu laden</span>
+    </div>
+  </div>`;
+}
+
+function updateStats() {
+  let games = 0, versions = 0, totalBytes = 0;
+  for (const c of cardsData) {
+    games += c.game_count;
+    for (const g of c.games) {
+      versions += g.version_count;
+      totalBytes += g.size_bytes * g.version_count;
+    }
+  }
+  document.getElementById('stat-cards').textContent    = cardsData.length;
+  document.getElementById('stat-games').textContent    = games;
+  document.getElementById('stat-versions').textContent = versions;
+  document.getElementById('stat-size').textContent     = humanSize(totalBytes);
+}
+
+// ── Log ────────────────────────────────────────────────────────────────────
+async function loadLog(sdId) {
+  const body = document.getElementById('log-body');
+  if (!body) return;
+  body.innerHTML = '<span style="color:var(--gb-muted)">Lade...</span>';
+  try {
+    const r = await fetch(`/api/log/${encodeURIComponent(sdId)}`);
+    const d = await r.json();
+    if (d.lines.length === 0) {
+      body.innerHTML = '<span style="color:var(--gb-muted)">(Log leer)</span>';
+      return;
+    }
+    body.innerHTML = d.lines.map(line => {
+      const ts   = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+      const rest = ts ? line.slice(ts[0].length) : line;
+      const tsHtml = ts ? `<span class="log-ts">${ts[0]}</span>` : '';
+      let cls = '';
+      if (/ERROR/i.test(rest))   cls = 'log-error';
+      else if (/WARNING/i.test(rest)) cls = 'log-warn';
+      else if (/Gesichert|Restore/i.test(rest)) cls = 'log-ok';
+      else if (/INFO/i.test(rest)) cls = 'log-info';
+      return `<div class="${cls}">${tsHtml}${escHtml(rest)}</div>`;
+    }).join('');
+    body.scrollTop = body.scrollHeight;
+  } catch(e) {
+    body.innerHTML = `<span class="log-error">Fehler: ${e.message}</span>`;
+  }
+}
+
+async function openLog(e, sdId) {
+  e.stopPropagation();
+  await loadLog(sdId);
+  const logEl = document.getElementById('log-body');
+  if (logEl) logEl.closest('.log-panel')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Backup ─────────────────────────────────────────────────────────────────
+async function runBackup(dryRun) {
+  const modal = document.getElementById('output-modal');
+  const title = document.getElementById('output-modal-title');
+  const out   = document.getElementById('output-content');
+
+  title.textContent = dryRun ? 'DRY-RUN LÄUFT...' : 'BACKUP LÄUFT...';
+  out.textContent   = dryRun ? '[ DRY-RUN – keine Änderungen ]\n\n' : '[ Backup startet... ]\n\n';
+  showModal('output-modal');
+
+  try {
+    const r = await fetch('/api/backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dry_run: dryRun })
+    });
+    const d = await r.json();
+    out.textContent += d.output || '';
+    out.scrollTop = out.scrollHeight;
+    title.textContent = d.ok ? (dryRun ? 'DRY-RUN ABGESCHLOSSEN' : '✔ BACKUP ABGESCHLOSSEN') : '✗ FEHLER';
+    if (!dryRun && d.ok) {
+      toast('Backup erfolgreich abgeschlossen!', 'ok');
+      setTimeout(loadData, 800);
+    } else if (!d.ok) {
+      toast('Fehler beim Backup. Siehe Ausgabe.', 'error');
+    }
+  } catch(e) {
+    out.textContent += `\nFehler: ${e.message}`;
+    title.textContent = '✗ VERBINDUNGSFEHLER';
+  }
+}
+
+// ── Restore Modal ──────────────────────────────────────────────────────────
+function openRestoreModal(sdId, gameName) {
+  const card = cardsData.find(c => c.id === sdId);
+  if (!card) return;
+  const game = card.games.find(g => g.name === gameName);
+  if (!game) return;
+
+  restoreCtx = { sdId, gameName, selectedVersion: null };
+  document.getElementById('restore-game-title').textContent = gameName;
+
+  const list = document.getElementById('restore-version-list');
+  const allVersions = [...game.versions];
+
+  if (allVersions.length === 0) {
+    list.innerHTML = '<div style="color:var(--gb-muted);font-size:12px;padding:8px">Keine Versionen vorhanden.</div>';
+  } else {
+    list.innerHTML = allVersions.map((v, i) => {
+      const isLatest = i === allVersions.length - 1;
+      const ts = v.replace(gameName + '_', '').replace('.sav', '');
+      const fmt = formatTimestamp(ts);
+      return `
+        <div class="version-item" onclick="selectVersion(this,'${v}')" data-ver="${v}">
+          <span class="version-name">${v}</span>
+          <span style="font-size:11px;color:var(--gb-muted)">${fmt}</span>
+          ${isLatest ? '<span class="version-tag latest">NEUESTE</span>' : ''}
+        </div>`;
+    }).join('');
+  }
+
+  // Safety-Backups anzeigen
+  if (game.restore_saves.length > 0) {
+    list.innerHTML += `<div style="font-family:var(--font-pixel);font-size:7px;color:var(--gb-muted);letter-spacing:1px;margin:14px 0 6px">SICHERHEITSKOPIEN VOR RESTORE</div>`;
+    list.innerHTML += game.restore_saves.map(v => `
+      <div class="version-item restore-safety">
+        <span class="version-name">${v}</span>
+        <span class="version-tag safety">SAFETY</span>
+      </div>`).join('');
+  }
+
+  showModal('restore-modal');
+}
+
+function selectVersion(el, version) {
+  document.querySelectorAll('.version-item:not(.restore-safety)').forEach(i => i.classList.remove('selected'));
+  el.classList.add('selected');
+  restoreCtx.selectedVersion = version;
+}
+
+async function confirmRestore() {
+  if (!restoreCtx.selectedVersion) {
+    toast('Bitte eine Version auswählen.', 'warn');
+    return;
+  }
+  const btn = document.getElementById('restore-confirm-btn');
+  btn.textContent = '⏳ Läuft...';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sd_id:      restoreCtx.sdId,
+        game_name:  restoreCtx.gameName,
+        version:    restoreCtx.selectedVersion
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      closeModal('restore-modal');
+      toast(`✔ Restore erfolgreich: ${restoreCtx.gameName}`, 'ok');
+      setTimeout(loadData, 500);
+    } else {
+      toast('Fehler: ' + (d.error || 'Unbekannt'), 'error');
+    }
+  } catch(e) {
+    toast('Verbindungsfehler: ' + e.message, 'error');
+  } finally {
+    btn.textContent = '↩ Wiederherstellen';
+    btn.disabled = false;
+  }
+}
+
+// ── Config Modal ───────────────────────────────────────────────────────────
+function openGameConfig(sdId, gameName, currentKeep) {
+  configCtx = { sdId, gameName };
+  document.getElementById('cfg-game-title').textContent = gameName;
+  document.getElementById('cfg-keep-input').value = currentKeep;
+  showModal('config-modal');
+}
+
+function openSdDefaultConfig(e, sdId, currentKeep) {
+  e.stopPropagation();
+  configCtx = { sdId, gameName: null };
+  document.getElementById('cfg-game-title').textContent = sdId + ' (SD-Default)';
+  document.getElementById('cfg-keep-input').value = currentKeep;
+  showModal('config-modal');
+}
+
+async function saveConfig() {
+  const value = parseInt(document.getElementById('cfg-keep-input').value);
+  if (isNaN(value) || value < 1) { toast('Ungültiger Wert.', 'warn'); return; }
+
+  try {
+    const r = await fetch('/api/set_keep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sd_id: configCtx.sdId, game_name: configCtx.gameName, value })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      closeModal('config-modal');
+      toast('Konfiguration gespeichert.', 'ok');
+      setTimeout(loadData, 300);
+    } else {
+      toast('Fehler: ' + (d.error || 'Unbekannt'), 'error');
+    }
+  } catch(e) {
+    toast('Verbindungsfehler.', 'error');
+  }
+}
+
+// ── Modal helpers ──────────────────────────────────────────────────────────
+function showModal(id) {
+  document.getElementById(id).classList.add('visible');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('visible');
+}
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+// ── Card collapse ──────────────────────────────────────────────────────────
+function toggleCard(id) {
+  document.getElementById(id)?.classList.toggle('collapsed');
+}
+
+function scrollToCard(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type === 'ok' ? '' : type}`;
+  el.innerHTML = `<span>${type === 'ok' ? '✔' : type === 'error' ? '✗' : '⚠'}</span> ${escHtml(msg)}`;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'slideOut 0.25s ease forwards';
+    setTimeout(() => el.remove(), 250);
+  }, 3500);
+}
+
+function showError(msg) {
+  document.getElementById('main-content').innerHTML = `
+    <div class="empty-state">
+      <span class="empty-icon">⚠</span>
+      <p style="color:var(--gb-red)">${escHtml(msg)}</p>
+    </div>`;
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function humanSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+
+function formatTimestamp(ts) {
+  try {
+    const m = ts.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+    if (!m) return ts;
+    return `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}:${m[6]}`;
+  } catch { return ts; }
+}
+
+// Auto-refresh alle 60s
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
